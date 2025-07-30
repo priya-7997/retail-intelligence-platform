@@ -1,1 +1,565 @@
- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail Intelligence Platform - AI-Powered Business Insights</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    
+    <!-- Styles - FIXED PATHS -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-chart-line brand-icon"></i>
+                <span class="brand-text">Retail Intelligence</span>
+                <span class="brand-badge">AI</span>
+            </div>
+            
+            <div class="nav-menu">
+                <button class="nav-item active" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-item" data-section="upload">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <span>Upload Data</span>
+                </button>
+                <button class="nav-item" data-section="insights">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>Insights</span>
+                </button>
+                <button class="nav-item" data-section="forecast">
+                    <i class="fas fa-crystal-ball"></i>
+                    <span>Forecast</span>
+                </button>
+            </div>
+            
+            <div class="nav-actions">
+                <button class="btn-secondary" id="exportBtn">
+                    <i class="fas fa-download"></i>
+                    Export
+                </button>
+                <div class="theme-toggle">
+                    <i class="fas fa-moon"></i>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard Section -->
+        <section id="dashboard-section" class="content-section active">
+            <div class="section-header">
+                <h1 class="section-title">Business Dashboard</h1>
+                <p class="section-subtitle">Real-time insights from your retail data</p>
+                
+                <div class="header-actions">
+                    <select id="fileSelector" class="file-selector">
+                        <option value="">Select processed file...</option>
+                    </select>
+                    <button class="btn-primary" id="refreshDashboard">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div id="dashboard-content" class="dashboard-content">
+                <!-- Welcome State -->
+                <div id="welcome-state" class="welcome-state">
+                    <div class="welcome-card">
+                        <div class="welcome-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h2>Welcome to Retail Intelligence Platform</h2>
+                        <p>Upload your retail data to get started with AI-powered insights, forecasting, and business intelligence.</p>
+                        <button class="btn-primary btn-large" onclick="showSection('upload')">
+                            <i class="fas fa-upload"></i>
+                            Upload Your Data
+                        </button>
+                        
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <i class="fas fa-brain"></i>
+                                <h3>AI-Powered Analysis</h3>
+                                <p>Automatic insights from your sales data</p>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-crystal-ball"></i>
+                                <h3>Smart Forecasting</h3>
+                                <p>3-model system for accurate predictions</p>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-rupee-sign"></i>
+                                <h3>Indian Market Focus</h3>
+                                <p>Optimized for Indian retail patterns</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div id="kpi-section" class="kpi-grid" style="display: none;">
+                    <!-- KPI cards will be dynamically generated -->
+                </div>
+
+                <!-- Alerts Section -->
+                <div id="alerts-section" class="alerts-container" style="display: none;">
+                    <h3><i class="fas fa-bell"></i> Active Alerts</h3>
+                    <div id="alerts-list" class="alerts-list">
+                        <!-- Alerts will be dynamically generated -->
+                    </div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div id="charts-section" class="charts-grid" style="display: none;">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Sales Trend</h3>
+                            <div class="chart-actions">
+                                <button class="btn-icon" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="salesTrendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Product Performance</h3>
+                            <div class="chart-actions">
+                                <button class="btn-icon" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="productChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Weekly Patterns</h3>
+                            <div class="chart-actions">
+                                <button class="btn-icon" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="weeklyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Revenue Distribution</h3>
+                            <div class="chart-actions">
+                                <button class="btn-icon" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Insights Preview -->
+                <div id="insights-preview" class="insights-preview" style="display: none;">
+                    <h3><i class="fas fa-lightbulb"></i> Key Insights</h3>
+                    <div id="insights-cards" class="insights-cards">
+                        <!-- Insights will be dynamically generated -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+        <section id="upload-section" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">Upload Your Data</h1>
+                <p class="section-subtitle">Upload CSV files to start generating insights</p>
+            </div>
+
+            <div class="upload-container">
+                <!-- Upload Area -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h3>Drag & Drop Your CSV File</h3>
+                        <p>or <span class="upload-link">browse files</span></p>
+                        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+                        
+                        <div class="upload-info">
+                            <div class="info-item">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Maximum file size: 50MB</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Supported formats: CSV, Excel</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Automatic column detection</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sample Data Guide -->
+                <div class="sample-guide">
+                    <h3><i class="fas fa-info-circle"></i> Sample Data Format</h3>
+                    <div class="sample-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>date</th>
+                                    <th>sales</th>
+                                    <th>product</th>
+                                    <th>quantity</th>
+                                    <th>customer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>2024-01-01</td>
+                                    <td>1500.00</td>
+                                    <td>Product A</td>
+                                    <td>2</td>
+                                    <td>CUST001</td>
+                                </tr>
+                                <tr>
+                                    <td>2024-01-02</td>
+                                    <td>2000.00</td>
+                                    <td>Product B</td>
+                                    <td>1</td>
+                                    <td>CUST002</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="format-tips">
+                        <h4>Tips for Best Results:</h4>
+                        <ul>
+                            <li>Use clear column names like 'date', 'sales', 'product'</li>
+                            <li>Ensure date format is consistent (YYYY-MM-DD preferred)</li>
+                            <li>Remove currency symbols from sales amounts</li>
+                            <li>Include at least 30 rows for meaningful analysis</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="uploadProgress" class="upload-progress" style="display: none;">
+                    <div class="progress-header">
+                        <h3>Processing Your Data</h3>
+                        <div class="progress-percentage">0%</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-steps">
+                        <div class="progress-step active">
+                            <i class="fas fa-upload"></i>
+                            <span>Uploading</span>
+                        </div>
+                        <div class="progress-step">
+                            <i class="fas fa-cogs"></i>
+                            <span>Processing</span>
+                        </div>
+                        <div class="progress-step">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Analyzing</span>
+                        </div>
+                        <div class="progress-step">
+                            <i class="fas fa-check"></i>
+                            <span>Complete</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Results -->
+                <div id="uploadResults" class="upload-results" style="display: none;">
+                    <!-- Results will be dynamically generated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Insights Section -->
+        <section id="insights-section" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">Business Insights</h1>
+                <p class="section-subtitle">AI-powered insights and recommendations</p>
+                
+                <div class="header-actions">
+                    <select id="insightsFileSelector" class="file-selector">
+                        <option value="">Select processed file...</option>
+                    </select>
+                    <button class="btn-primary" id="generateInsights">
+                        <i class="fas fa-brain"></i>
+                        Generate Insights
+                    </button>
+                </div>
+            </div>
+
+            <div id="insights-content" class="insights-content">
+                <!-- Loading State -->
+                <div id="insights-loading" class="loading-state" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <h3>Generating AI Insights...</h3>
+                    <p>Analyzing your data patterns and generating actionable recommendations</p>
+                </div>
+
+                <!-- Insights Dashboard -->
+                <div id="insights-dashboard" class="insights-dashboard" style="display: none;">
+                    <!-- Executive Summary -->
+                    <div class="insights-card executive-summary">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-line"></i> Executive Summary</h3>
+                        </div>
+                        <div class="card-content" id="executiveSummary">
+                            <!-- Executive summary content -->
+                        </div>
+                    </div>
+
+                    <!-- Action Items -->
+                    <div class="insights-card action-items">
+                        <div class="card-header">
+                            <h3><i class="fas fa-tasks"></i> Priority Actions</h3>
+                        </div>
+                        <div class="card-content" id="actionItems">
+                            <!-- Action items content -->
+                        </div>
+                    </div>
+
+                    <!-- Insights Grid -->
+                    <div class="insights-grid">
+                        <div class="insight-category">
+                            <h4><i class="fas fa-trending-up"></i> Sales Performance</h4>
+                            <div id="salesInsights" class="insight-list">
+                                <!-- Sales insights -->
+                            </div>
+                        </div>
+
+                        <div class="insight-category">
+                            <h4><i class="fas fa-calendar-alt"></i> Seasonal Patterns</h4>
+                            <div id="seasonalInsights" class="insight-list">
+                                <!-- Seasonal insights -->
+                            </div>
+                        </div>
+
+                        <div class="insight-category">
+                            <h4><i class="fas fa-boxes"></i> Inventory Intelligence</h4>
+                            <div id="inventoryInsights" class="insight-list">
+                                <!-- Inventory insights -->
+                            </div>
+                        </div>
+
+                        <div class="insight-category">
+                            <h4><i class="fas fa-dollar-sign"></i> Revenue Opportunities</h4>
+                            <div id="revenueInsights" class="insight-list">
+                                <!-- Revenue insights -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Alerts -->
+                    <div class="insights-card risk-alerts" id="riskAlertsCard" style="display: none;">
+                        <div class="card-header">
+                            <h3><i class="fas fa-exclamation-triangle"></i> Risk Alerts</h3>
+                        </div>
+                        <div class="card-content" id="riskAlerts">
+                            <!-- Risk alerts content -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Forecast Section -->
+        <section id="forecast-section" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">Sales Forecasting</h1>
+                <p class="section-subtitle">AI-powered demand prediction with 3-model intelligence</p>
+                
+                <div class="header-actions">
+                    <select id="forecastFileSelector" class="file-selector">
+                        <option value="">Select processed file...</option>
+                    </select>
+                    <button class="btn-primary" id="generateForecast">
+                        <i class="fas fa-crystal-ball"></i>
+                        Generate Forecast
+                    </button>
+                </div>
+            </div>
+
+            <div id="forecast-content" class="forecast-content">
+                <!-- Forecast Configuration -->
+                <div id="forecast-config" class="forecast-config">
+                    <div class="config-card">
+                        <h3><i class="fas fa-cog"></i> Forecast Settings</h3>
+                        
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <label for="forecastDays">Forecast Period</label>
+                                <select id="forecastDays">
+                                    <option value="7">7 Days</option>
+                                    <option value="14">14 Days</option>
+                                    <option value="30" selected>30 Days</option>
+                                    <option value="60">60 Days</option>
+                                    <option value="90">90 Days</option>
+                                </select>
+                            </div>
+
+                            <div class="config-item">
+                                <label for="modelType">Model Selection</label>
+                                <select id="modelType">
+                                    <option value="auto" selected>Auto-Select Best Model</option>
+                                    <option value="prophet">Prophet (Seasonal)</option>
+                                    <option value="xgboost">XGBoost (Complex)</option>
+                                    <option value="arima">ARIMA (Traditional)</option>
+                                </select>
+                            </div>
+
+                            <div class="config-item">
+                                <label for="confidenceLevel">Confidence Level</label>
+                                <select id="confidenceLevel">
+                                    <option value="80" selected>80%</option>
+                                    <option value="90">90%</option>
+                                    <option value="95">95%</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="model-info">
+                            <h4>Model Capabilities</h4>
+                            <div class="model-grid">
+                                <div class="model-card">
+                                    <h5>Prophet</h5>
+                                    <p>Best for seasonal patterns, holidays, missing data</p>
+                                </div>
+                                <div class="model-card">
+                                    <h5>XGBoost</h5>
+                                    <p>Best for multiple features, complex relationships</p>
+                                </div>
+                                <div class="model-card">
+                                    <h5>ARIMA</h5>
+                                    <p>Best for simple trends, quick forecasting</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forecast Loading -->
+                <div id="forecast-loading" class="loading-state" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <h3>Generating Forecast...</h3>
+                    <p>Training AI models and predicting future sales</p>
+                </div>
+
+                <!-- Forecast Results -->
+                <div id="forecast-results" class="forecast-results" style="display: none;">
+                    <!-- Forecast Summary -->
+                    <div class="forecast-summary">
+                        <div class="summary-card">
+                            <h3><i class="fas fa-chart-line"></i> Forecast Summary</h3>
+                            <div id="forecastSummaryContent" class="summary-content">
+                                <!-- Summary content -->
+                            </div>
+                        </div>
+
+                        <div class="model-info-card">
+                            <h3><i class="fas fa-brain"></i> Model Information</h3>
+                            <div id="modelInfoContent" class="model-content">
+                                <!-- Model info content -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Forecast Chart -->
+                    <div class="forecast-chart-container">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3>Sales Forecast</h3>
+                                <div class="chart-actions">
+                                    <button class="btn-icon" title="Download Chart">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                    <button class="btn-icon" title="Fullscreen">
+                                        <i class="fas fa-expand"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="forecastChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Forecast Table -->
+                    <div class="forecast-table-container">
+                        <div class="table-card">
+                            <div class="table-header">
+                                <h3><i class="fas fa-table"></i> Detailed Forecast</h3>
+                                <button class="btn-secondary" id="exportForecastData">
+                                    <i class="fas fa-download"></i>
+                                    Export Data
+                                </button>
+                            </div>
+                            <div class="table-container">
+                                <table id="forecastTable" class="forecast-table">
+                                    <!-- Table content will be generated -->
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="loading-spinner large"></div>
+            <h3 id="loadingTitle">Processing...</h3>
+            <p id="loadingMessage">Please wait while we process your request</p>
+        </div>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notifications" class="notifications-container"></div>
+
+    <!-- Scripts - FIXED PATHS -->
+    <script src="scripts/utils.js"></script>
+    <script src="scripts/api.js"></script>
+    <script src="scripts/charts.js"></script>
+    <script src="scripts/app.js"></script>
+</body>
+</html>

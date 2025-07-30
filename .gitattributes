@@ -1,0 +1,9 @@
+ 
+# Force shell scripts to use LF
+*.sh text eol=lf
+
+# Python files use LF (for Linux compatibility)
+*.py text eol=lf
+
+# Windows batch files can use CRLF
+*.bat text eol=crlf
