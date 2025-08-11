@@ -38,9 +38,9 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -59,10 +59,10 @@ if (frontend_path / "assets").exists():
     app.mount("/assets", StaticFiles(directory=frontend_path / "assets"), name="assets")
 
 # Include API routers
-app.include_router(upload.router, prefix=settings.API_V1_PREFIX, tags=["upload"])
-app.include_router(forecast.router, prefix=settings.API_V1_PREFIX, tags=["forecast"])
-app.include_router(insights.router, prefix=settings.API_V1_PREFIX, tags=["insights"])
-app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX, tags=["dashboard"])
+app.include_router(upload.router, prefix=f"{settings.API_V1_PREFIX}/upload", tags=["upload"])
+app.include_router(forecast.router, prefix=f"{settings.API_V1_PREFIX}/forecast", tags=["forecast"])
+app.include_router(insights.router, prefix=f"{settings.API_V1_PREFIX}/insights", tags=["insights"])
+app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["dashboard"])
 
 @app.get("/", response_class=HTMLResponse)
 async def root():

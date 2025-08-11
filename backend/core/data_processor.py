@@ -439,9 +439,14 @@ class RetailDataProcessor:
         date_col = column_analysis['date_column']
         sales_col = column_analysis['sales_column']
         
-        # Set date as index
+        # Ensure date column is datetime type
         df_agg = df.copy()
+        if not pd.api.types.is_datetime64_any_dtype(df_agg[date_col]):
+            df_agg[date_col] = pd.to_datetime(df_agg[date_col], errors='coerce')
         df_agg = df_agg.set_index(date_col)
+        # Ensure index is DatetimeIndex
+        if not isinstance(df_agg.index, pd.DatetimeIndex):
+            df_agg.index = pd.to_datetime(df_agg.index, errors='coerce')
         
         # Aggregate based on frequency
         freq_map = {

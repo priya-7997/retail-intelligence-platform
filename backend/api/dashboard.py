@@ -52,6 +52,18 @@ async def get_dashboard_overview(file_id: str) -> JSONResponse:
             "data_health": _get_data_health_status(file_result["results"])
         }
         
+        def sanitize_floats(obj):
+            if isinstance(obj, dict):
+                return {k: sanitize_floats(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [sanitize_floats(x) for x in obj]
+            elif isinstance(obj, float):
+                if np.isnan(obj) or np.isinf(obj):
+                    return None
+                return obj
+            return obj
+
+        dashboard_data = sanitize_floats(dashboard_data)
         return JSONResponse(content={
             "success": True,
             "file_id": file_id,

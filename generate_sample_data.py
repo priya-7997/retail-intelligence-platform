@@ -101,7 +101,7 @@ def generate_sample_retail_data():
     
     # Save to CSV
     output_file = 'data/samples/indian_retail_sample.csv'
-    df.to_csv(output_file, index=False)
+    df.to_csv(output_file, index=False, encoding='utf-8')
     
     # Generate summary
     summary = {

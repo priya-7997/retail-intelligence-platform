@@ -1,4 +1,4 @@
- /* Retail Intelligence Platform - Main Styles */
+/* Retail Intelligence Platform - Main Styles */
 
 /* CSS Variables for Modern Design */
 :root {
@@ -245,6 +245,8 @@ p {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  align-items: center;
+  text-align: center;
 }
 
 .section-title {
@@ -265,6 +267,7 @@ p {
   align-items: center;
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
+  justify-content: center;
 }
 
 /* Button Styles */

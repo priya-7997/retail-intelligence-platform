@@ -1,13 +1,33 @@
-"""
-Forecasting API for Retail Intelligence Platform
-Handles model training, forecasting, and model management
-"""
+__all__ = ["router"]
+def custom_json_response(content, status_code=200):
+    return JSONResponse(content=json.loads(json.dumps(content, cls=CustomJSONEncoder)), status_code=status_code)
+import json
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        import numpy as np
+        if isinstance(obj, (pd.Timestamp, np.datetime64)):
+            return str(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if hasattr(obj, 'isoformat'):
+            try:
+                return obj.isoformat()
+            except Exception:
+                return str(obj)
+        return super().default(obj)
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+class AutoForecastRequest(BaseModel):
+    file_id: str = Field(..., description="Processed file ID")
+    forecast_periods: int = Field(30, description="Number of periods to forecast", ge=1, le=365)
 from typing import Dict, List, Optional, Any
+import json
 import pandas as pd
+import numpy as np
 import logging
 from datetime import datetime
 import json
@@ -15,6 +35,7 @@ import json
 from config import settings
 from core.forecasting import ForecastingEngine
 from core.model_selector import ModelSelector
+from core import forecasting
 from core.data_processor import RetailDataProcessor
 
 router = APIRouter()
@@ -46,28 +67,22 @@ async def train_model(
     background_tasks: BackgroundTasks
 ) -> JSONResponse:
     """
-    Train a forecasting model on processed data
     
     Args:
         request: Training request with file ID and model type
-        
-    Returns:
-        Training job ID and status
+        background_tasks: BackgroundTasks
     """
     try:
         # Validate file exists
         from api.upload import processing_results
         if request.file_id not in processing_results:
             raise HTTPException(status_code=404, detail="File not found")
-        
         file_result = processing_results[request.file_id]
         if file_result.get("status") != "completed":
             raise HTTPException(status_code=400, detail="File processing not completed")
-        
         # Generate training job ID
         import uuid
         job_id = str(uuid.uuid4())
-        
         # Initialize training status
         training_results[job_id] = {
             "status": "started",
@@ -76,7 +91,6 @@ async def train_model(
             "model_type": request.model_type,
             "started_at": datetime.now().isoformat()
         }
-        
         # Start training in background
         background_tasks.add_task(
             train_model_background,
@@ -85,7 +99,6 @@ async def train_model(
             request.model_type,
             request.parameters or {}
         )
-        
         return JSONResponse(
             status_code=202,
             content={
@@ -96,7 +109,6 @@ async def train_model(
                 "status": "training"
             }
         )
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -106,7 +118,6 @@ async def train_model(
 @router.get("/train/status/{job_id}")
 async def get_training_status(job_id: str) -> JSONResponse:
     """
-    Get training job status
     
     Args:
         job_id: Training job identifier
@@ -114,71 +125,62 @@ async def get_training_status(job_id: str) -> JSONResponse:
     Returns:
         Training status and progress
     """
-    try:
-        if job_id not in training_results:
-            raise HTTPException(status_code=404, detail="Training job not found")
-        
-        result = training_results[job_id]
-        
-        return JSONResponse(content={
-            "success": True,
-            "job_id": job_id,
-            "status": result.get("status"),
-            "progress": result.get("progress", 0),
-            "model_type": result.get("model_type"),
-            "started_at": result.get("started_at"),
-            "completed_at": result.get("completed_at"),
-            "error": result.get("error"),
-            "model_id": result.get("model_id")
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Training status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if job_id not in training_results:
+        raise HTTPException(status_code=404, detail="Training job not found")
+
+    result = training_results[job_id]
+
+    return JSONResponse(content={
+        "success": True,
+        "job_id": job_id,
+        "status": result.get("status"),
+        "progress": result.get("progress", 0),
+        "model_type": result.get("model_type"),
+        "started_at": result.get("started_at"),
+        "completed_at": result.get("completed_at"),
+        "error": result.get("error"),
+        "model_id": result.get("model_id")
+    })
 
 @router.post("/predict")
 async def generate_forecast(request: ForecastRequest) -> JSONResponse:
-    """
-    Generate forecast using best available model
-    
-    Args:
-        request: Forecast request parameters
-        
-    Returns:
-        Forecast results with confidence intervals
-    """
     try:
         # Check cache first
         cache_key = f"{request.file_id}_{request.model_type}_{request.forecast_periods}"
         if cache_key in forecast_cache:
             cached_result = forecast_cache[cache_key]
-            # Check if cache is less than 1 hour old
             cache_time = datetime.fromisoformat(cached_result["generated_at"])
             if (datetime.now() - cache_time).seconds < 3600:
+                logger.info(f"Returning cached forecast for {cache_key}")
                 return JSONResponse(content=cached_result)
-        
-        # Validate file exists
+
         from api.upload import processing_results
         if request.file_id not in processing_results:
+            logger.error(f"File ID {request.file_id} not found in processing_results")
             raise HTTPException(status_code=404, detail="File not found")
-        
         file_result = processing_results[request.file_id]
         if file_result.get("status") != "completed":
+            logger.error(f"File ID {request.file_id} processing not completed")
             raise HTTPException(status_code=400, detail="File processing not completed")
-        
-        # Load processed data
         processed_path = file_result["results"]["processed_file_path"]
         df = pd.read_csv(processed_path)
-        
-        # Get column analysis from file results
         column_analysis = file_result["results"]["column_analysis"]
-        
-        # Aggregate data for forecasting
+        # Ensure 'y' column exists for forecasting
+        if 'y' not in df.columns:
+            # Try to map common sales columns to 'y'
+            for candidate in ['sales', 'amount', 'value', 'revenue']:
+                if candidate in df.columns:
+                    df['y'] = df[candidate]
+                    break
+        # If still no 'y', raise error
+        if 'y' not in df.columns:
+            logger.error("No 'y' or sales column found in uploaded data.")
+            return JSONResponse(content={
+                "success": False,
+                "message": "No 'y' or sales column found in uploaded data. Please ensure your file has a 'y' or 'sales' column.",
+                "available_columns": list(df.columns)
+            }, status_code=400)
         df_agg = data_processor.aggregate_for_forecasting(df, column_analysis, request.frequency)
-        
-        # Select model if not specified
         if not request.model_type:
             model_selection = model_selector.select_best_model(df_agg)
             selected_model = model_selection["recommended_model"]
@@ -186,77 +188,97 @@ async def generate_forecast(request: ForecastRequest) -> JSONResponse:
         else:
             selected_model = request.model_type
             selection_confidence = 1.0
-        
-        # Train and forecast
-        logger.info(f"Training {selected_model} model for forecast")
-        
-        if selected_model == "prophet":
-            training_result = forecasting_engine.train_prophet(df_agg)
-        elif selected_model == "xgboost":
-            training_result = forecasting_engine.train_xgboost(df_agg)
-        elif selected_model == "arima":
-            training_result = forecasting_engine.train_arima(df_agg)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported model type: {selected_model}")
-        
-        if not training_result["success"]:
-            raise HTTPException(status_code=500, detail=f"Model training failed: {training_result.get('error')}")
-        
-        # Generate forecast
-        model_id = training_result["model_id"]
+
+        # Find a trained model for the selected type
+        model_id = None
+        for mid, meta in forecasting_engine.model_metadata.items():
+            if meta["model_type"] == selected_model and meta.get("trained_at"):
+                model_id = mid
+                break
+        if not model_id:
+            logger.error(f"No trained {selected_model} model found in model_metadata. Available: {[meta['model_type'] for meta in forecasting_engine.model_metadata.values()]}")
+            return JSONResponse(content={
+                "success": False,
+                "message": f"No trained {selected_model} model found. Please train the model first using /train endpoint.",
+                "model_type": selected_model,
+                "available_models": [meta['model_type'] for meta in forecasting_engine.model_metadata.values()]
+            }, status_code=400)
+
         forecast_result = forecasting_engine.forecast(model_id, request.forecast_periods)
-        
         if not forecast_result["success"]:
-            raise HTTPException(status_code=500, detail=f"Forecasting failed: {forecast_result.get('error')}")
-        
-        # Prepare response
+            logger.error(f"Forecasting failed for model_id {model_id}: {forecast_result.get('error')}")
+            return JSONResponse(content={
+                "success": False,
+                "error": forecast_result.get('error'),
+                "message": f"Forecasting failed: {forecast_result.get('error')}",
+                "model_type": selected_model,
+                "model_id": model_id
+            }, status_code=500)
+
+        def serialize_forecast(forecast):
+            for row in forecast:
+                # Convert date
+                if "ds" in row and not isinstance(row["ds"], str):
+                    try:
+                        row["ds"] = row["ds"].strftime("%Y-%m-%d")
+                    except Exception:
+                        row["ds"] = str(row["ds"])
+                # Sanitize all float values
+                for k, v in row.items():
+                    if isinstance(v, float):
+                        if np.isnan(v) or np.isinf(v):
+                            row[k] = None
+            return forecast
+
         response_data = {
             "success": True,
-            "forecast": forecast_result["forecast"],
+            "forecast": serialize_forecast(forecast_result["forecast"]),
             "model_used": selected_model,
             "model_id": model_id,
             "selection_confidence": selection_confidence,
-            "training_metrics": training_result.get("metrics", {}),
+            "training_metrics": forecasting_engine.model_metadata[model_id].get("metrics", {}),
             "forecast_periods": request.forecast_periods,
             "frequency": request.frequency,
             "generated_at": datetime.now().isoformat(),
             "model_performance": {
-                "mae": training_result.get("metrics", {}).get("mae"),
-                "rmse": training_result.get("metrics", {}).get("rmse"),
-                "r2": training_result.get("metrics", {}).get("r2")
+                "mae": forecasting_engine.model_metadata[model_id].get("metrics", {}).get("mae"),
+                "rmse": forecasting_engine.model_metadata[model_id].get("metrics", {}).get("rmse"),
+                "r2": forecasting_engine.model_metadata[model_id].get("metrics", {}).get("r2")
             }
         }
-        
         # Add feature importance for XGBoost
-        if selected_model == "xgboost" and "feature_importance" in training_result:
-            response_data["feature_importance"] = training_result["feature_importance"]
-        
+        if selected_model == "xgboost" and "feature_importance" in forecasting_engine.model_metadata[model_id]:
+            response_data["feature_importance"] = forecasting_engine.model_metadata[model_id]["feature_importance"]
         # Cache result
         forecast_cache[cache_key] = response_data
-        
+        logger.info(f"Forecast generated successfully for model_id {model_id}")
         return JSONResponse(content=response_data)
-        
-    except HTTPException:
+    except HTTPException as he:
+        logger.error(f"Forecasting HTTPException: {he.detail}")
         raise
     except Exception as e:
         logger.error(f"Forecasting error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e),
+            "message": f"Forecasting failed: {str(e)}"
+        }, status_code=500)
+        # Add feature importance for XGBoost
+        if selected_model == "xgboost" and "feature_importance" in forecasting_engine.model_metadata[model_id]:
+            response_data["feature_importance"] = forecasting_engine.model_metadata[model_id]["feature_importance"]
+        # Cache result
+        forecast_cache[cache_key] = response_data
+        return JSONResponse(content=response_data)
+        raise
+    except Exception as e:
+        error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
+        logger.error(f"Forecasting error: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post("/auto-forecast")
-async def auto_forecast(
-    file_id: str,
-    forecast_periods: int = 30
-) -> JSONResponse:
-    """
-    Automatically select best model and generate forecast
-    
-    Args:
-        file_id: Processed file identifier
-        forecast_periods: Number of periods to forecast
-        
-    Returns:
-        Complete forecast with model selection reasoning
-    """
+async def auto_forecast(request: AutoForecastRequest) -> JSONResponse:
+    file_id = request.file_id
+    forecast_periods = request.forecast_periods
     try:
         # Validate file
         from api.upload import processing_results
@@ -282,7 +304,64 @@ async def auto_forecast(
         # Try recommended model first, fallback if needed
         models_to_try = [recommended_model] + model_selection.get("fallback_models", [])
         forecast_result = None
-        
+
+        # Use ForecastingEngine to train and forecast
+        engine = forecasting.ForecastingEngine()
+        train_methods = {
+            "arima": engine.train_arima,
+            "prophet": engine.train_prophet,
+            "xgboost": engine.train_xgboost,
+        }
+        forecast_result = None
+        model_id = None
+        for model in models_to_try:
+            try:
+                train_func = train_methods.get(model)
+                if not train_func:
+                    continue
+                train_out = train_func(df_agg)
+                if not train_out.get("success"):
+                    continue
+                model_id = train_out["model_id"]
+                forecast_out = engine.forecast(model_id, forecast_periods)
+                if forecast_out.get("success"):
+                    forecast_result = forecast_out
+                    break
+            except Exception as e:
+                logger.warning(f"Model {model} failed: {e}")
+                continue
+
+        # Compute forecast summary for frontend
+        def compute_forecast_summary(forecast):
+            if not forecast or not isinstance(forecast, list):
+                return {}
+            try:
+                import numpy as np
+                yhat = np.array([row.get("yhat", 0) for row in forecast])
+                total = float(np.sum(yhat))
+                avg = float(np.mean(yhat))
+                trend = "up" if yhat[-1] > yhat[0] else ("down" if yhat[-1] < yhat[0] else "stable")
+                period_days = len(yhat)
+                return {
+                    "total_forecasted_revenue": round(total, 2),
+                    "average_daily_revenue": round(avg, 2),
+                    "trend_direction": trend,
+                    "forecast_period_days": period_days
+                }
+            except Exception:
+                return {}
+
+        forecast_data = forecast_result["forecast"] if forecast_result and "forecast" in forecast_result else []
+        summary = compute_forecast_summary(forecast_data)
+        response_data = {
+            "success": bool(forecast_result is not None),
+            "forecast": forecast_data,
+            "forecast_summary": summary,
+            "model_used": recommended_model,
+            "selection_confidence": model_selection.get("confidence", 0.8),
+            "training_metrics": forecast_result.get("metrics", {}) if forecast_result else {},
+        }
+        return custom_json_response(response_data)
         for model_type in models_to_try:
             try:
                 logger.info(f"Attempting forecast with {model_type}")
@@ -333,7 +412,7 @@ async def auto_forecast(
             "generated_at": datetime.now().isoformat()
         }
         
-        return JSONResponse(content=response_data)
+        return custom_json_response(response_data)
         
     except HTTPException:
         raise
@@ -343,12 +422,7 @@ async def auto_forecast(
 
 @router.get("/models")
 async def list_available_models() -> JSONResponse:
-    """
-    List available forecasting models and their capabilities
     
-    Returns:
-        Model information and capabilities
-    """
     try:
         models_info = {
             "prophet": {
@@ -419,15 +493,7 @@ async def list_available_models() -> JSONResponse:
 
 @router.get("/models/compare/{file_id}")
 async def compare_all_models(file_id: str) -> JSONResponse:
-    """
-    Train and compare all available models for given dataset
     
-    Args:
-        file_id: Processed file identifier
-        
-    Returns:
-        Comparison of all models with performance metrics
-    """
     try:
         # Validate file
         from api.upload import processing_results
@@ -447,29 +513,30 @@ async def compare_all_models(file_id: str) -> JSONResponse:
         # Train all models
         model_results = {}
         model_ids = []
-        
         # Prophet
         try:
             prophet_result = forecasting_engine.train_prophet(df_agg)
             if prophet_result["success"]:
+                # Remove non-serializable model object
+                prophet_result.pop("model", None)
                 model_results["prophet"] = prophet_result
                 model_ids.append(prophet_result["model_id"])
         except Exception as e:
             model_results["prophet"] = {"success": False, "error": str(e)}
-        
         # XGBoost
         try:
             xgboost_result = forecasting_engine.train_xgboost(df_agg)
             if xgboost_result["success"]:
+                xgboost_result.pop("model", None)
                 model_results["xgboost"] = xgboost_result
                 model_ids.append(xgboost_result["model_id"])
         except Exception as e:
             model_results["xgboost"] = {"success": False, "error": str(e)}
-        
         # ARIMA
         try:
             arima_result = forecasting_engine.train_arima(df_agg)
             if arima_result["success"]:
+                arima_result.pop("model", None)
                 model_results["arima"] = arima_result
                 model_ids.append(arima_result["model_id"])
         except Exception as e:
@@ -527,15 +594,6 @@ async def compare_all_models(file_id: str) -> JSONResponse:
 
 @router.delete("/models/{model_id}")
 async def delete_trained_model(model_id: str) -> JSONResponse:
-    """
-    Delete a trained model
-    
-    Args:
-        model_id: Model identifier to delete
-        
-    Returns:
-        Deletion confirmation
-    """
     try:
         # Remove from forecasting engine
         if model_id in forecasting_engine.models:
@@ -572,15 +630,7 @@ async def delete_trained_model(model_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 async def train_model_background(job_id: str, file_id: str, model_type: str, parameters: Dict):
-    """
-    Background task for model training
-    
-    Args:
-        job_id: Training job identifier
-        file_id: Data file identifier
-        model_type: Type of model to train
-        parameters: Training parameters
-    """
+
     try:
         # Update status
         training_results[job_id]["status"] = "loading_data"
@@ -639,15 +689,7 @@ async def train_model_background(job_id: str, file_id: str, model_type: str, par
         logger.error(f"Background training error for job {job_id}: {e}")
 
 def _generate_forecast_summary(forecast_data: List[Dict]) -> Dict[str, Any]:
-    """
-    Generate summary statistics for forecast
-    
-    Args:
-        forecast_data: List of forecast points
-        
-    Returns:
-        Forecast summary with key insights
-    """
+
     try:
         if not forecast_data:
             return {"error": "No forecast data"}
@@ -689,15 +731,7 @@ def _generate_forecast_summary(forecast_data: List[Dict]) -> Dict[str, Any]:
         return {"error": "Unable to generate forecast summary"}
 
 def _get_model_suitability(model_type: str) -> List[str]:
-    """
-    Get suitability description for model type
-    
-    Args:
-        model_type: Type of model
-        
-    Returns:
-        List of suitable use cases
-    """
+
     suitability = {
         "prophet": [
             "Seasonal retail patterns",
@@ -718,5 +752,4 @@ def _get_model_suitability(model_type: str) -> List[str]:
             "Traditional statistical approach"
         ]
     }
-    
     return suitability.get(model_type, ["General forecasting"])

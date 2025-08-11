@@ -24,13 +24,8 @@ def test_dependencies():
             print(f"  ❌ {dep}")
             failed.append(dep)
     
-    if failed:
-        print(f"\n❌ Missing dependencies: {', '.join(failed)}")
-        print("Run: pip install -r requirements.txt")
-        return False
-    
+    assert not failed, f"Missing dependencies: {', '.join(failed)}. Run: pip install -r requirements.txt"
     print("✅ All dependencies installed!")
-    return True
 
 def test_directory_structure():
     """Test if directory structure is correct"""
@@ -56,12 +51,8 @@ def test_directory_structure():
             print(f"  ❌ {dir_path}")
             missing.append(dir_path)
     
-    if missing:
-        print(f"\n❌ Missing directories: {', '.join(missing)}")
-        return False
-    
+    assert not missing, f"Missing directories: {', '.join(missing)}"
     print("✅ Directory structure correct!")
-    return True
 
 def test_api_server():
     """Test if API server starts and responds"""
@@ -70,10 +61,9 @@ def test_api_server():
     try:
         # Start server in background (this is a simple test)
         response = requests.get("http://127.0.0.1:8000/health", timeout=5)
-        if response.status_code == 200:
-            print("  ✅ API server is running")
-            print(f"  ✅ Health check: {response.json()}")
-            return True
+        assert response.status_code == 200, "API server health check failed"
+        print("  ✅ API server is running")
+        print(f"  ✅ Health check: {response.json()}")
     except requests.exceptions.ConnectionError:
         print("  ❌ API server not running")
         print("  💡 Start server with: python backend/main.py")
@@ -93,11 +83,8 @@ def test_sample_data():
         print(f"  ✅ Generated {summary['total_records']} records")
         print(f"  ✅ Date range: {summary['date_range']}")
         print(f"  ✅ Total sales: ₹{summary['total_sales']:,.2f}")
-        
-        return True
     except Exception as e:
-        print(f"  ❌ Sample data generation failed: {e}")
-        return False
+        assert False, f"Sample data generation failed: {e}"
 
 def test_ml_models():
     """Test ML model imports and basic functionality"""
@@ -117,10 +104,8 @@ def test_ml_models():
         print("  ✅ ARIMA imported")
         
         print("✅ All ML models available!")
-        return True
     except Exception as e:
-        print(f"  ❌ ML model test failed: {e}")
-        return False
+        assert False, f"ML model test failed: {e}"
 
 def run_full_test():
     """Run complete platform test"""
@@ -128,45 +113,20 @@ def run_full_test():
     print("=" * 50)
     
     tests = [
-        ("Dependencies", test_dependencies),
-        ("Directory Structure", test_directory_structure),
-        ("ML Models", test_ml_models),
-        ("Sample Data", test_sample_data),
+        test_dependencies,
+        test_directory_structure,
+        test_ml_models,
+        test_sample_data,
     ]
-    
-    results = []
-    for test_name, test_func in tests:
-        try:
-            result = test_func()
-            results.append((test_name, result))
-        except Exception as e:
-            print(f"❌ {test_name} test crashed: {e}")
-            results.append((test_name, False))
-    
-    # Summary
     print("\n" + "=" * 50)
     print("📋 Test Summary:")
-    
-    passed = 0
-    for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {test_name}: {status}")
-        if result:
-            passed += 1
-    
-    print(f"\n🎯 Tests Passed: {passed}/{len(tests)}")
-    
-    if passed == len(tests):
-        print("🎉 All tests passed! Platform is ready to use.")
-        print("\n🚀 Next steps:")
-        print("  1. Run: python backend/main.py")
-        print("  2. Open: http://127.0.0.1:8000")
-        print("  3. Upload the generated sample data")
-        print("  4. Generate insights and forecasts")
-    else:
-        print("⚠️  Some tests failed. Please fix issues before proceeding.")
-    
-    return passed == len(tests)
+    for test_func in tests:
+        try:
+            test_func()
+            print(f"  {test_func.__name__}: ✅ PASS")
+        except AssertionError as e:
+            print(f"  {test_func.__name__}: ❌ FAIL - {e}")
+    print("\n🎯 All tests executed. Review results above.")
 
 if __name__ == "__main__":
     run_full_test()

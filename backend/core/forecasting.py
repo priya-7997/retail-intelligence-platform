@@ -43,6 +43,52 @@ class ForecastingEngine:
         self.models = {}
         self.model_metadata = {}
         self.indian_holidays = self._get_indian_holidays()
+        self.models_dir = Path('backend/models/saved_models')
+        self.metadata_path = self.models_dir / 'model_metadata.json'
+        self._load_models_and_metadata()
+
+    def _load_models_and_metadata(self):
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+        # Load metadata
+        if self.metadata_path.exists():
+            try:
+                with open(self.metadata_path, 'r') as f:
+                    self.model_metadata = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load model metadata: {e}")
+                self.model_metadata = {}
+        # Load models
+        for model_id, meta in self.model_metadata.items():
+            model_file = self.models_dir / f'{model_id}.pkl'
+            if model_file.exists():
+                try:
+                    if meta.get('model_type') == 'xgboost':
+                        # XGBoost: load dict with model, feature_columns, etc.
+                        self.models[model_id] = joblib.load(model_file)
+                    else:
+                        # Prophet/ARIMA: load model object
+                        self.models[model_id] = joblib.load(model_file)
+                except Exception as e:
+                    logger.error(f"Failed to load model {model_id}: {e}")
+
+    def _save_model_and_metadata(self, model_id, model, model_type=None):
+        # Save model
+        model_file = self.models_dir / f'{model_id}.pkl'
+        try:
+            if model_type == 'xgboost' or (model_type is None and model_id.startswith('xgboost_')):
+                # Save the full dict for XGBoost
+                joblib.dump(model, model_file)
+            else:
+                # Save just the model object for Prophet/ARIMA
+                joblib.dump(model, model_file)
+        except Exception as e:
+            logger.error(f"Failed to save model {model_id}: {e}")
+        # Save metadata
+        try:
+            with open(self.metadata_path, 'w') as f:
+                json.dump(self.model_metadata, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save model metadata: {e}")
         
     def _get_indian_holidays(self) -> pd.DataFrame:
         """Get Indian holidays for Prophet model"""
@@ -98,6 +144,7 @@ class ForecastingEngine:
             # Store model
             model_id = f"prophet_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             self.models[model_id] = model
+            self._save_model_and_metadata(model_id, model)
             
             # Calculate training metrics
             train_forecast = model.predict(train_df)
@@ -182,11 +229,14 @@ class ForecastingEngine:
             
             # Store model
             model_id = f"xgboost_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            self.models[model_id] = {
+            xgb_dict = {
                 'model': model,
                 'feature_columns': feature_cols,
                 'feature_importance': dict(zip(feature_cols, model.feature_importances_))
             }
+            self.models[model_id] = xgb_dict
+            # Save the full dict for XGBoost
+            self._save_model_and_metadata(model_id, xgb_dict, model_type='xgboost')
             
             # Calculate metrics
             y_pred = model.predict(X_test)
@@ -244,6 +294,7 @@ class ForecastingEngine:
             # Store model
             model_id = f"arima_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             self.models[model_id] = fitted_model
+            self._save_model_and_metadata(model_id, fitted_model)
             
             # Calculate metrics on fitted values
             fitted_values = fitted_model.fittedvalues
@@ -388,20 +439,31 @@ class ForecastingEngine:
     def forecast(self, model_id: str, periods: int = 30) -> Dict[str, Any]:
         """Generate forecasts using trained model"""
         try:
+            logger.info(f"Forecast request: model_id={model_id}, periods={periods}")
             if model_id not in self.models:
+                logger.error(f"Model {model_id} not found in self.models")
                 raise ValueError(f"Model {model_id} not found")
-            
+
             model_type = self.model_metadata[model_id]['model_type']
-            
+            logger.info(f"Selected model_type: {model_type}")
+
             if model_type == 'prophet':
-                return self._forecast_prophet(model_id, periods)
+                logger.info("Calling _forecast_prophet...")
+                result = self._forecast_prophet(model_id, periods)
             elif model_type == 'xgboost':
-                return self._forecast_xgboost(model_id, periods)
+                logger.info("Calling _forecast_xgboost...")
+                result = self._forecast_xgboost(model_id, periods)
             elif model_type == 'arima':
-                return self._forecast_arima(model_id, periods)
+                logger.info("Calling _forecast_arima...")
+                result = self._forecast_arima(model_id, periods)
             else:
+                logger.error(f"Unknown model type: {model_type}")
                 raise ValueError(f"Unknown model type: {model_type}")
-                
+
+            logger.info(f"Forecast result keys: {list(result.keys())}")
+            if not result.get('success'):
+                logger.error(f"Model prediction failed: {result.get('error')}")
+            return result
         except Exception as e:
             logger.error(f"Forecasting failed: {e}")
             return {
@@ -412,16 +474,13 @@ class ForecastingEngine:
     def _forecast_prophet(self, model_id: str, periods: int) -> Dict[str, Any]:
         """Generate Prophet forecast"""
         model = self.models[model_id]
-        
-        # Create future dataframe
+        logger.info(f"Prophet model: {model}")
         future = model.make_future_dataframe(periods=periods)
-        
-        # Generate forecast
+        logger.info(f"Future dataframe shape: {future.shape}, columns: {future.columns.tolist()}")
         forecast = model.predict(future)
-        
-        # Extract forecast data
+        logger.info(f"Forecast dataframe shape: {forecast.shape}, columns: {forecast.columns.tolist()}")
         forecast_data = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(periods)
-        
+        logger.info(f"Prophet forecast data shape: {forecast_data.shape}, NaNs: {forecast_data.isnull().sum().to_dict()}")
         return {
             'success': True,
             'forecast': forecast_data.to_dict('records'),
@@ -434,35 +493,33 @@ class ForecastingEngine:
         model_info = self.models[model_id]
         model = model_info['model']
         feature_cols = model_info['feature_columns']
-        
-        # This is a simplified implementation
-        # In practice, you'd need to engineer features for future dates
+        logger.info(f"XGBoost model: {model}, feature_cols: {feature_cols}")
         forecast_dates = pd.date_range(
             start=datetime.now().date(),
             periods=periods,
             freq='D'
         )
-        
-        # Create basic feature matrix for future dates
         future_df = pd.DataFrame({'ds': forecast_dates})
         future_features = self._engineer_features(future_df)
-        
-        # Use only available features
+        logger.info(f"Future features shape: {future_features.shape}, columns: {future_features.columns.tolist()}")
         available_features = [col for col in feature_cols if col in future_features.columns]
         X_future = future_features[available_features].fillna(0)
-        
-        # Generate predictions
-        predictions = model.predict(X_future)
-        
+        logger.info(f"X_future shape: {X_future.shape}, NaNs: {X_future.isnull().sum().to_dict()}")
+        try:
+            predictions = model.predict(X_future)
+            logger.info(f"XGBoost predictions shape: {predictions.shape if hasattr(predictions, 'shape') else len(predictions)}")
+        except Exception as e:
+            logger.error(f"XGBoost prediction error: {e}")
+            return {'success': False, 'error': str(e)}
         forecast_data = []
         for i, (date, pred) in enumerate(zip(forecast_dates, predictions)):
             forecast_data.append({
                 'ds': date.strftime('%Y-%m-%d'),
                 'yhat': float(pred),
-                'yhat_lower': float(pred * 0.9),  # Simple confidence intervals
+                'yhat_lower': float(pred * 0.9),
                 'yhat_upper': float(pred * 1.1)
             })
-        
+        logger.info(f"XGBoost forecast data length: {len(forecast_data)}")
         return {
             'success': True,
             'forecast': forecast_data,
@@ -473,19 +530,20 @@ class ForecastingEngine:
     def _forecast_arima(self, model_id: str, periods: int) -> Dict[str, Any]:
         """Generate ARIMA forecast"""
         model = self.models[model_id]
-        
-        # Generate forecast
-        forecast_result = model.forecast(steps=periods)
-        conf_int = model.get_forecast(steps=periods).conf_int()
-        
-        # Create forecast dates
+        logger.info(f"ARIMA model: {model}")
+        try:
+            forecast_result = model.forecast(steps=periods)
+            conf_int = model.get_forecast(steps=periods).conf_int()
+            logger.info(f"ARIMA forecast_result shape: {getattr(forecast_result, 'shape', len(forecast_result))}, conf_int shape: {conf_int.shape}")
+        except Exception as e:
+            logger.error(f"ARIMA prediction error: {e}")
+            return {'success': False, 'error': str(e)}
         last_date = model.data.dates[-1] if hasattr(model.data, 'dates') else datetime.now()
         forecast_dates = pd.date_range(
             start=last_date + timedelta(days=1),
             periods=periods,
             freq='D'
         )
-        
         forecast_data = []
         for i, date in enumerate(forecast_dates):
             forecast_data.append({
@@ -494,7 +552,7 @@ class ForecastingEngine:
                 'yhat_lower': float(conf_int.iloc[i, 0]),
                 'yhat_upper': float(conf_int.iloc[i, 1])
             })
-        
+        logger.info(f"ARIMA forecast data length: {len(forecast_data)}")
         return {
             'success': True,
             'forecast': forecast_data,

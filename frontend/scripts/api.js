@@ -149,11 +149,15 @@ const api = new APIClient();
 const uploadAPI = {
     // Upload file for processing
     async uploadFile(file, onProgress) {
-        return api.uploadFile('/upload', file, onProgress);
+        return api.uploadFile('/upload/upload', file, onProgress);
     },
 
     // Get upload status
     async getStatus(fileId) {
+        if (!fileId || fileId === 'undefined') {
+            // Prevent API call if fileId is missing or invalid
+            return { success: false, message: 'No file ID provided' };
+        }
         return api.get(`/upload/status/${fileId}`);
     },
 
@@ -169,7 +173,7 @@ const uploadAPI = {
 
     // List uploaded files
     async listFiles() {
-        return api.get('/upload/list');
+        return api.get('/upload/upload/list');
     },
 
     // Validate CSV structure
@@ -548,4 +552,4 @@ window.apiUtils = apiUtils;
 window.safeAPICall = safeAPICall;
 window.uploadFileWithProgress = uploadFileWithProgress;
 window.generateAutoForecast = generateAutoForecast;
-window.generateComprehensiveInsights = generateComprehensiveInsights; 
+window.generateComprehensiveInsights = generateComprehensiveInsights;

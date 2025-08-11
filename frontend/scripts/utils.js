@@ -1,4 +1,4 @@
- /**
+/**
  * Utility Functions for Retail Intelligence Platform
  * Common helper functions used across the application
  */

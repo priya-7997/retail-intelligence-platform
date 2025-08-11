@@ -11,10 +11,12 @@
     <!-- Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
-    <!-- Chart.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    <!-- Chart.js (must be loaded before charts.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Favicon to prevent 404 error -->
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
     
-    <!-- Styles - FIXED PATHS -->
+    <!-- Styles -->
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/components.css">
 </head>
@@ -106,8 +108,8 @@
                             </div>
                             <div class="feature-item">
                                 <i class="fas fa-rupee-sign"></i>
-                                <h3>Indian Market Focus</h3>
-                                <p>Optimized for Indian retail patterns</p>
+                                <h3>Market Focus</h3>
+                                <p>Optimized for retail patterns</p>
                             </div>
                         </div>
                     </div>
@@ -397,6 +399,9 @@
                             <!-- Risk alerts content -->
                         </div>
                     </div>
+
+                    <!-- Extra Analysis -->
+                    <div id="extraAnalysis" class="extra-analysis"></div>
                 </div>
             </div>
         </section>
@@ -411,6 +416,10 @@
                     <select id="forecastFileSelector" class="file-selector">
                         <option value="">Select processed file...</option>
                     </select>
+                    <button class="btn-secondary" id="trainModelBtn">
+                        <i class="fas fa-brain"></i>
+                        Train Model
+                    </button>
                     <button class="btn-primary" id="generateForecast">
                         <i class="fas fa-crystal-ball"></i>
                         Generate Forecast
@@ -433,6 +442,8 @@
                                     <option value="30" selected>30 Days</option>
                                     <option value="60">60 Days</option>
                                     <option value="90">90 Days</option>
+                                    <option value="180">180 Days</option>
+                                    <option value="365">365 Days</option>
                                 </select>
                             </div>
 
@@ -443,15 +454,6 @@
                                     <option value="prophet">Prophet (Seasonal)</option>
                                     <option value="xgboost">XGBoost (Complex)</option>
                                     <option value="arima">ARIMA (Traditional)</option>
-                                </select>
-                            </div>
-
-                            <div class="config-item">
-                                <label for="confidenceLevel">Confidence Level</label>
-                                <select id="confidenceLevel">
-                                    <option value="80" selected>80%</option>
-                                    <option value="90">90%</option>
-                                    <option value="95">95%</option>
                                 </select>
                             </div>
                         </div>
@@ -556,7 +558,7 @@
     <!-- Notification System -->
     <div id="notifications" class="notifications-container"></div>
 
-    <!-- Scripts - FIXED PATHS -->
+    <!-- Scripts: Chart.js must be loaded before charts.js, all scripts as classic scripts -->
     <script src="scripts/utils.js"></script>
     <script src="scripts/api.js"></script>
     <script src="scripts/charts.js"></script>

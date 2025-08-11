@@ -81,10 +81,12 @@ async def upload_file(
             status_code=202,
             content={
                 "success": True,
-                "message": "File uploaded successfully. Processing started.",
-                "file_id": file_id,
-                "filename": file.filename,
-                "status": "processing"
+                "data": {
+                    "file_id": file_id,
+                    "filename": file.filename,
+                    "status": "processing"
+                },
+                "message": "File uploaded successfully. Processing started."
             }
         )
         

@@ -106,7 +106,11 @@ class Settings:
     }
 
 # Global settings instance
+
 settings = Settings()
+
+# Export format_currency for import
+__all__ = ["settings", "format_currency"]
 
 # Currency formatting for Indian Rupees (Windows-safe)
 def format_currency(amount: float) -> str:

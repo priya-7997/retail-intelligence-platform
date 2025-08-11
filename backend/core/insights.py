@@ -48,6 +48,9 @@ class InsightsGenerator:
         """Generate complete business insights from processed data and forecasts"""
         try:
             df = processed_data['data']
+            logger.info(f"[DEBUG] DataFrame shape: {df.shape}, columns: {list(df.columns)}")
+            logger.info(f"[DEBUG] column_analysis: {column_analysis}")
+            logger.info(f"[DEBUG] forecast_results: {forecast_results}")
             insights = {
                 'executive_summary': [],
                 'sales_insights': [],
@@ -59,37 +62,62 @@ class InsightsGenerator:
                 'kpi_dashboard': {},
                 'risk_alerts': []
             }
-            
+
             # Generate different types of insights
+            logger.info("[DEBUG] Generating executive summary...")
             insights['executive_summary'] = self._generate_executive_summary(df, processed_data, column_analysis)
+            logger.info(f"[DEBUG] Executive summary: {insights['executive_summary']}")
+
+            logger.info("[DEBUG] Analyzing sales patterns...")
             insights['sales_insights'] = self._analyze_sales_patterns(df, column_analysis)
+            logger.info(f"[DEBUG] Sales insights: {insights['sales_insights']}")
+
+            logger.info("[DEBUG] Analyzing trends...")
             insights['trend_analysis'] = self._analyze_trends(df, column_analysis)
+            logger.info(f"[DEBUG] Trend analysis: {insights['trend_analysis']}")
+
+            logger.info("[DEBUG] Analyzing seasonality...")
             insights['seasonality_insights'] = self._analyze_seasonality(df, column_analysis)
+            logger.info(f"[DEBUG] Seasonality insights: {insights['seasonality_insights']}")
+
+            logger.info("[DEBUG] Generating KPI dashboard...")
             insights['kpi_dashboard'] = self._generate_kpi_dashboard(df, column_analysis)
-            
+            logger.info(f"[DEBUG] KPI dashboard: {insights['kpi_dashboard']}")
+
             # Product-specific insights if product data available
             if column_analysis and column_analysis.get('product_column'):
+                logger.info("[DEBUG] Generating inventory alerts...")
                 insights['inventory_alerts'] = self._generate_inventory_insights(df, column_analysis)
+                logger.info(f"[DEBUG] Inventory alerts: {insights['inventory_alerts']}")
+                logger.info("[DEBUG] Identifying revenue opportunities...")
                 insights['revenue_opportunities'] = self._identify_revenue_opportunities(df, column_analysis)
-            
+                logger.info(f"[DEBUG] Revenue opportunities: {insights['revenue_opportunities']}")
+
             # Forecast-based insights
             if forecast_results:
+                logger.info("[DEBUG] Analyzing forecast insights...")
                 forecast_insights = self._analyze_forecast_insights(forecast_results)
                 insights['forecast_insights'] = forecast_insights
-            
+                logger.info(f"[DEBUG] Forecast insights: {forecast_insights}")
+
             # Generate action items
+            logger.info("[DEBUG] Generating action items...")
             insights['action_items'] = self._generate_action_items(insights)
+            logger.info(f"[DEBUG] Action items: {insights['action_items']}")
+
+            logger.info("[DEBUG] Identifying risks...")
             insights['risk_alerts'] = self._identify_risks(df, column_analysis, forecast_results)
-            
+            logger.info(f"[DEBUG] Risk alerts: {insights['risk_alerts']}")
+
             logger.info(f"Generated {sum(len(v) if isinstance(v, list) else 1 for v in insights.values())} insights")
-            
+
             return {
                 'success': True,
                 'insights': insights,
                 'generated_at': datetime.now().isoformat(),
                 'data_period': self._get_data_period(df, column_analysis)
             }
-            
+
         except Exception as e:
             logger.error(f"Error generating insights: {e}")
             return {
